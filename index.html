@@ -1,0 +1,1044 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0203" />
+  <title>Um Oceano de Amor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500&family=Playfair+Display:wght@600&family=Montserrat:wght@600;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- O three.js vem da CDN com versão fixa, para o site não quebrar quando sair uma versão nova -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="cena" aria-label="Um redemoinho vermelho com um coração de luz no centro"></canvas>
+
+  <!-- Entrada -->
+  <div class="entrada" id="entrada">
+    <div class="cartao">
+      <h1>Um Oceano de Amor pra Você</h1>
+      <svg class="desenho" viewBox="0 0 120 96" aria-hidden="true">
+        <circle cx="60" cy="22" r="13" />
+        <path class="onda1" d="M10 58 Q 22.5 48 35 58 T 60 58 T 85 58 T 110 58" />
+        <path class="onda2" d="M10 72 Q 22.5 62 35 72 T 60 72 T 85 72 T 110 72" />
+        <path class="onda3" d="M10 86 Q 22.5 76 35 86 T 60 86 T 85 86 T 110 86" />
+      </svg>
+      <p class="sub">três meses · três luas cheias</p>
+      <button class="botao" id="mergulhar">Mergulhar</button>
+      <p class="aviso-som">aumenta o som ♪</p>
+    </div>
+  </div>
+
+  <p class="dica" id="dica">toque nos corações e nas luas</p>
+  <button class="som" id="som" hidden aria-label="Ligar ou desligar a música">♪</button>
+
+  <!-- Carta com o poema (preenchida pelo script) -->
+  <div class="carta" id="carta" role="dialog" aria-modal="true" aria-labelledby="carta-titulo">
+    <div class="carta-caixa">
+      <img class="carta-foto" id="carta-foto" alt="" hidden />
+      <span class="carta-etiqueta" id="carta-etiqueta"></span>
+      <h2 id="carta-titulo"></h2>
+      <p class="carta-poema" id="carta-poema"></p>
+      <p class="carta-musica" id="carta-musica"></p>
+      <button class="botao" id="voltar">Voltar</button>
+    </div>
+  </div>
+
+  <!-- ANAVITÓRIA — Quero Contar pra São Paulo (musica.mp3, na mesma pasta) -->
+  <audio id="musica" src="musica.mp3" loop preload="auto"></audio>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+    import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+    import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+    import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+    // =====================================================================
+    // TEXTOS: tudo o que aparece escrito está aqui, para ficar fácil de editar.
+    // Para pôr foto numa carta, salve a imagem em fotos/ e escreva o nome em "foto".
+    // =====================================================================
+
+    // Frases que giram deitadas no redemoinho: trechos e títulos de músicas, conferidos na letra.
+    // Só "TRÊS LUAS CHEIAS" e "TRÊS MESES DE NÓS" são nossas (não são de música).
+    const FRASES = [
+      "TU TEM PRA MIM O NOME MAIS BONITO", "REPOUSA TUA PAZ NA MINHA", "UM FIM DE TARDE EM QUALQUER ESQUINA",
+      "É TÃO BONITO TE ESPIAR VIVER", "VOCÊ FICA TÃO BEM AQUI", "TÃO NATURAL QUE ME PARECE SINA", "TEM COR DE MARTE",
+      "A GALÁXIA QUE MORA EM VOCÊ", "ENCONTRO LAR", "NA CURVA DO TEU OMBRO", "É FEITO SORTE", "ME ABRAÇA FORTE",
+      "O RITMO ACELERADO", "E SE DEIXA EM MIM", "TU É TREVO DE QUATRO FOLHAS", "VOCÊ DESÁGUA EM MIM", "ME CONTA DA TUA JANELA",
+      "E EU OCEANO", "MANHÃ DE DOMINGO À TOA", "AZUL DA COR DO MAR", "CONVERSA RARA E BOA", "TRÊS LUAS CHEIAS",
+      "COMO UMA ONDA NO MAR", "PEDAÇO DE SONHO", "TU QUE TEM ESSE ABRAÇO CASA", "TRÊS MESES DE NÓS", "QUERO CONTAR PRA SÃO PAULO",
+      "PORQUE EU TE AMO", "BABYDOLL", "PRA VOCÊ GUARDEI O AMOR", "PERTO DE VOCÊ", "PRETTY BABY", "CHAMEGO MEU",
+      "EU TE DEVORO", "TE AMAR É MASSA DEMAIS", "COR DE MARTE", "A GENTE JUNTO", "UM DIA APÓS O OUTRO",
+      "AI, AMOR", "LUZ DOS OLHOS", "JURA JURADINHO", "STAY", "SIDERAL", "VEM MEU AMOR", "DENGO", "NÓS",
+      "TUA", "FICA",
+    ];
+
+    // Frases que flutuam no céu em volta da galáxia, piscando como estrelas.
+    // Trechos curtos tirados das letras (conferidos em kboing.com.br, letras.com.br e vagalume.com.br).
+    const ESTRELAS = [
+      // ANAVITÓRIA
+      "Quero contar pra São Paulo que eu te amo", "Quero viver um amor que os poetas invejem",
+      "Eu nunca fui tão feliz quanto agora", "Por que você não namora comigo?", "Um plano infalível de nós dois",
+      "Não é acaso, é só amor", "Teu cheiro só tu tem", "Me diz que o mundo não vai acabar",
+      "Passa aqui depois das seis?", "É tão singular", "O teu abraço que me enlaça devagar",
+      "Pro nosso nós não deixar de ser assim", "Teu olho degradê pra colorir", "Só você sabe adivinhar",
+      "Tu é trevo de quatro folhas", "Manhã de domingo à toa", "Conversa rara e boa",
+      "Tu que tem esse abraço casa", "Me leva contigo pra passear",
+      "A galáxia que mora em você", "Encontro lar no perfume da tua nuca", "É feito sorte",
+      // ANAVITÓRIA — Calendário
+      "Eu não preciso de altar", "Só vem", "Repousa tua paz na minha", "Tu tem pra mim o nome mais bonito",
+      "A boca canta ao te chamar", "Teu canto chama o meu sorriso", "E tá tão fácil de encaixar",
+      "Os teus cenários na minha rotina", "No calendário passear", "Um fim de tarde em qualquer esquina",
+      "Tão natural que me parece sina", "Me tenho inteira pra você", "É tão bonito te espiar viver",
+      "Se encontra, se perde e se vê", "Mas volta pra se dividir, amor", "É que você fica tão bem aqui comigo",
+      "Me escrever nas suas melhores linhas",
+      // Marisa Monte
+      "Deixa eu dizer que te amo", "Isso me acalma, me acolhe a alma", "Amor I Love You",
+      "Meu peito agora dispara", "Ainda bem que agora encontrei você", "Você veio pra ficar",
+      "Você que me faz feliz", "Deixa que eu seja o céu", "Anoiteça e amanheça eu", "Beija eu",
+      "No meu infinito particular", "Eu sou daqui, eu não sou de Marte", "Tem um verdadeiro amor",
+      // MPB
+      "Você deságua em mim, e eu oceano", "Só sei viver se for por você", "Vem me fazer feliz porque eu te amo",
+      "O seu amor reluz", "Estrela caindo bem devagar", "Você sabe que eu só penso em você",
+      "Eu quero um a um", "Eu fico imaginando nós dois", "Só abro pra você, mais ninguém",
+      "Ter um sonho todo azul", "A vida vem em ondas, como um mar", "Há tanta vida lá fora",
+      "Por dentro eu te devoro", "O mar quando quebra na praia é bonito",
+    ];
+
+    // Um coração flutuante para cada carta deste grupo
+    const CARTAS_CORACAO = [
+      {
+        titulo: "Oceano",
+        poema: "Djavan diz que você deságua em mim.\nEu achava exagero.\nAté ver o mar subir\ntoda vez que o teu nome\nacende a tela do meu celular.",
+        musica: "♪ “Você deságua em mim, e eu oceano” — Djavan, Oceano",
+        foto: null,
+      },
+      {
+        titulo: "Trevo",
+        poema: "Sorte, pra mim, era coisa de loteria.\nAí veio você,\nnum dia comum,\nsem anúncio nenhum.\nAgora eu entendo a música.",
+        musica: "♪ “Tu é trevo de quatro folhas” — ANAVITÓRIA, Trevo (Tu)",
+        foto: null,
+      },
+      {
+        titulo: "Cor de Marte",
+        poema: "Me fita, ela canta.\nE eu fico pensando\nno que você vê\nquando me olha assim, demorado,\ncomo quem olha o mar\nsem pressa de ir embora.",
+        musica: "♪ “Encontro lar no perfume da tua nuca” — ANAVITÓRIA, Cor de Marte",
+        foto: null,
+      },
+      {
+        titulo: "Calendário",
+        poema: "Ela canta que não precisa de altar.\nEu também não.\nMe basta um fim de tarde,\nqualquer esquina\ne você chegando.",
+        musica: "♪ “Tu tem pra mim o nome mais bonito” — ANAVITÓRIA, Calendário",
+        foto: null,
+      },
+      {
+        titulo: "Tua janela",
+        poema: "Me conta o que você vê daí.\nO céu, a rua, o cachorro do vizinho,\nqualquer coisa.\nNão é a vista que eu quero.\nÉ a tua voz contando.",
+        musica: "♪ “Me conta da tua janela” — ANAVITÓRIA, Me Conta da Tua Janela",
+        foto: null,
+      },
+      {
+        titulo: "Azul",
+        poema: "Tem dias em que eu não sei dizer\no que sinto.\nEntão eu aponto pro mar\ne deixo ele explicar.",
+        musica: "♪ “Ter um sonho todo azul, azul da cor do mar” — Tim Maia, Azul da Cor do Mar",
+        foto: null,
+      },
+      {
+        titulo: "Onda",
+        poema: "Nada fica do mesmo jeito,\na música já avisou.\nEu nem quero que fique.\nQuero ver no que a gente vira.",
+        musica: "♪ “Tudo muda o tempo todo no mundo” — Lulu Santos, Como uma Onda",
+        foto: null,
+      },
+      {
+        titulo: "Devoro",
+        poema: "Não sei gostar pouco.\nNunca soube.\nCom você, pela primeira vez,\nisso não parece defeito.",
+        musica: "♪ “Teus sinais me confundem da cabeça aos pés” — Djavan, Eu Te Devoro",
+        foto: null,
+      },
+      {
+        titulo: "Babydoll",
+        poema: "Você viu meus dias de ressaca\ne não foi embora.\nFicou na beira,\ncom os pés na água fria,\nesperando o mar acalmar.",
+        musica: "♪ inspirado em BABYDOLL, de Ari Abdul",
+        foto: null,
+      },
+      {
+        titulo: "Insônia",
+        poema: "Três da manhã.\nEu devia estar dormindo,\nmas estou relendo a nossa conversa\ncomo quem procura conchas\nna mesma faixa de areia.",
+        musica: "♪ inspirado em iNSOMNiAC, de Ella Boh",
+        foto: null,
+      },
+      {
+        titulo: "O mar",
+        poema: "Caymmi cantou que é bonito\no mar quando quebra na praia.\nEu acho bonito\no jeito que você ri\nantes de terminar a piada.",
+        musica: "♪ “O mar quando quebra na praia é bonito” — Dorival Caymmi, O Mar",
+        foto: null,
+      },
+    ];
+
+    // As três luas que giram no alto: uma para cada mês
+    const CARTAS_LUA = [
+      {
+        etiqueta: "primeira lua",
+        titulo: "Mês um",
+        poema: "A lua cheia puxa a maré\nsem fazer barulho.\nFoi assim com você:\nquando eu vi,\njá estava longe da areia.",
+        musica: "♪ “A vida vem em ondas, como um mar” — Lulu Santos, Como uma Onda",
+        foto: null,
+      },
+      {
+        etiqueta: "segunda lua",
+        titulo: "Mês dois",
+        poema: "No segundo mês\naprendi os teus silêncios.\nQuais pedem colo,\nquais pedem espaço,\nquais só pedem que eu fique.",
+        musica: "♪ “Você veio pra ficar” — Marisa Monte, Ainda Bem",
+        foto: null,
+      },
+      {
+        etiqueta: "terceira lua",
+        titulo: "Mês três",
+        poema: "Três luas.\nPouco tempo\npra quem conta no calendário.\nPra quem conta em marés,\num oceano.",
+        musica: "♪ “No calendário passear” — ANAVITÓRIA, Calendário",
+        foto: null,
+      },
+    ];
+
+    // O coração grande do centro abre esta
+    const CARTA_FINAL = {
+      etiqueta: "nosso dia",
+      titulo: "Três meses",
+      poema: "Não tenho promessa de para sempre.\nTenho outra coisa:\nvontade de estar aqui\nna quarta lua,\ne na quinta,\ne em todas que vierem.",
+      musica: "♪ “Não é acaso, é só amor” — ANAVITÓRIA, Porque Eu Te Amo",
+      foto: null,
+    };
+
+    // =====================================================================
+    // CENA
+    // =====================================================================
+
+    const reduzirMovimento = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const celular = matchMedia("(pointer: coarse)").matches || innerWidth < 700;
+    // menos partículas no celular para manter a animação lisa
+    const Q = celular ? 0.55 : 0.75;
+
+    const canvas = document.getElementById("cena");
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    const scene = new THREE.Scene();
+    // o fundo vai pela cena (e não pelo setClearColor), que passa pela conversão de cor certa;
+    // com setClearColor o abismo saía azul-acinzentado depois do brilho
+    scene.background = new THREE.Color(0x0a0203);
+    
+    const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 400);
+
+    // A câmera fica mais longe na tela em pé, para o redemoinho caber na largura
+    function posicaoFinal() {
+      const k = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 0.7 : 1.2;
+      return new THREE.Vector3(0, 9.5 * k, 19 * k);
+    }
+    const ALVO = new THREE.Vector3(0, 2.6, 0);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.enablePan = false;
+    controls.minDistance = 8;
+    controls.maxDistance = 48;
+    controls.maxPolarAngle = Math.PI * 0.47; // não deixa ir para baixo do mar
+    controls.autoRotateSpeed = 0.45;
+    controls.enabled = false; // só liga depois do mergulho
+
+    // ---- Brilho (bloom): é o que faz as partículas parecerem acesas ----
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.8, 0.32, 0.32);
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+
+    const uPixel = { value: renderer.getPixelRatio() };
+
+    // Aleatório com distribuição de sino (concentra perto do zero)
+    function gauss() {
+      return (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+    }
+
+    // Paleta do raio: centro vermelho vivo → carmim → vinho → quase preto
+    const PALETA = [
+      [0.0, new THREE.Color("#ff6b78")],
+      [0.1, new THREE.Color("#e0303f")],
+      [0.3, new THREE.Color("#b5162a")],
+      [0.6, new THREE.Color("#7a0c1a")],
+      [1.0, new THREE.Color("#3d0610")],
+    ];
+    function corNoRaio(f) {
+      for (let i = 1; i < PALETA.length; i++) {
+        if (f <= PALETA[i][0]) {
+          const [a, ca] = PALETA[i - 1];
+          const [b, cb] = PALETA[i];
+          return ca.clone().lerp(cb, (f - a) / (b - a));
+        }
+      }
+      return PALETA[PALETA.length - 1][1].clone();
+    }
+
+    // ---- Ponto redondo e macio, usado por todas as partículas ----
+    const FRAG_PONTO = /* glsl */ `
+      varying vec3 vCor;
+      varying float vAlfa;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.0, d);
+        gl_FragColor = vec4(vCor * a, a * vAlfa);
+      }
+    `;
+
+    function materialPontos(vertexShader, uniforms) {
+      return new THREE.ShaderMaterial({
+        uniforms: { uPixel, ...uniforms },
+        vertexShader,
+        fragmentShader: FRAG_PONTO,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+    }
+
+    // =====================================================================
+    // 1. O REDEMOINHO: três braços (um por mês) de partículas que giram
+    //    e ondulam. A cada batida do coração sai uma onda do centro.
+    // =====================================================================
+    const RAIO = 15;
+    const tempoBatida = { value: 99 }; // segundos desde a última batida
+    const tempo = { value: 0 };
+
+    {
+      const n = Math.floor(90000 * Q);
+      const raio = new Float32Array(n);
+      const angulo = new Float32Array(n);
+      const altura = new Float32Array(n);
+      const tamanho = new Float32Array(n);
+      const fase = new Float32Array(n);
+      const cor = new Float32Array(n * 3);
+      const BRACOS = 3;
+
+      for (let i = 0; i < n; i++) {
+        let r, a;
+        if (Math.random() < 0.72) {
+          // partícula num braço da espiral
+          r = Math.pow(Math.random(), 0.9) * RAIO + 0.4;
+          const braco = (i % BRACOS) * ((Math.PI * 2) / BRACOS);
+          a = braco + r * 0.42 + gauss() * (0.18 + r * 0.025);
+        } else {
+          // "fundo do mar": poeira espalhada entre os braços
+          r = Math.pow(Math.random(), 0.55) * RAIO * 1.1 + 0.3;
+          a = Math.random() * Math.PI * 2;
+        }
+        raio[i] = r;
+        angulo[i] = a;
+        // centro mais alto e grosso, bordas finas como a superfície da água
+        altura[i] = gauss() * (0.06 + 0.55 * Math.exp(-r * 0.7));
+        tamanho[i] = 0.6 + Math.random() * 1.4 + (Math.random() < 0.03 ? 2.5 : 0);
+        fase[i] = Math.random() * 6.28;
+        const c = Math.random() < 0.05 ? new THREE.Color("#ff8a95") : corNoRaio(r / RAIO);
+        cor.set([c.r, c.g, c.b], i * 3);
+      }
+
+      const geo = new THREE.BufferGeometry();
+      // a posição de verdade é calculada no shader; esta só serve para o three.js saber o tamanho
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+      geo.setAttribute("aRaio", new THREE.BufferAttribute(raio, 1));
+      geo.setAttribute("aAngulo", new THREE.BufferAttribute(angulo, 1));
+      geo.setAttribute("aAltura", new THREE.BufferAttribute(altura, 1));
+      geo.setAttribute("aTamanho", new THREE.BufferAttribute(tamanho, 1));
+      geo.setAttribute("aFase", new THREE.BufferAttribute(fase, 1));
+      geo.setAttribute("aCor", new THREE.BufferAttribute(cor, 3));
+      geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), RAIO * 1.3);
+
+      const mat = materialPontos(
+        /* glsl */ `
+        attribute float aRaio, aAngulo, aAltura, aTamanho, aFase;
+        attribute vec3 aCor;
+        uniform float uTempo, uBatida, uPixel;
+        varying vec3 vCor;
+        varying float vAlfa;
+        void main() {
+          // gira quase como um bloco (as frases acompanham); o centro só um pouquinho mais rápido,
+          // senão em poucos minutos os braços se enrolam e viram anéis
+          float a = aAngulo - uTempo * (0.13 + 0.03 / (aRaio + 1.5));
+          float y = aAltura;
+          // ondulação do mar
+          y += sin(aRaio * 0.9 - uTempo * 1.6) * 0.12 * (aRaio / 15.0);
+          // onda de choque que sai do centro a cada batida
+          float frente = uBatida * 6.0;
+          float onda = exp(-pow((aRaio - frente) * 0.8, 2.0)) * max(0.0, 1.0 - uBatida / 2.8);
+          y += onda * 0.3;
+          vec3 p = vec3(cos(a) * aRaio, y, sin(a) * aRaio);
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          float brilho = 0.75 + 0.25 * sin(uTempo * 2.0 + aFase);
+          vCor = aCor * (brilho + onda * 0.8);
+          vAlfa = 0.7;
+          gl_PointSize = aTamanho * uPixel * (36.0 / -mv.z);
+        }
+      `,
+        { uTempo: tempo, uBatida: tempoBatida },
+      );
+      scene.add(new THREE.Points(geo, mat));
+    }
+
+    // =====================================================================
+    // 2. O CORAÇÃO de luz que bate em cima do redemoinho
+    // =====================================================================
+    const ALTURA_CORACAO = 6.8;
+    const grupoCoracao = new THREE.Group();
+    grupoCoracao.position.y = ALTURA_CORACAO;
+    scene.add(grupoCoracao);
+    const pulso = { value: 0 };
+
+    {
+      // pontos dentro da forma clássica de coração: (x² + y² − 1)³ − x²y³ ≤ 0
+      const dentro = (x, y) => Math.pow(x * x + y * y - 1, 3) - x * x * y * y * y <= 0;
+      const n = Math.floor(14000 * Q);
+      const pos = new Float32Array(n * 3);
+      const tamanho = new Float32Array(n);
+      const fase = new Float32Array(n);
+      const cor = new Float32Array(n * 3);
+      const ESCALA = 2.6;
+      let i = 0;
+      while (i < n) {
+        let x, y;
+        const borda = i < n * 0.35;
+        if (borda) {
+          // contorno: deixa a forma bem definida
+          const t = Math.random() * Math.PI * 2;
+          x = (16 * Math.pow(Math.sin(t), 3)) / 16;
+          y = (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) / 16 + 0.08;
+          x += gauss() * 0.025;
+          y += gauss() * 0.025;
+        } else {
+          x = (Math.random() * 2 - 1) * 1.2;
+          y = Math.random() * 2.4 - 1.2;
+          if (!dentro(x, y)) continue;
+        }
+        // volume: mais grosso no meio, fino na borda
+        const grossura = borda ? 0.08 : 0.42 * (1 - Math.min(1, Math.hypot(x, y * 0.9) * 0.75));
+        pos.set([x * ESCALA, y * ESCALA, gauss() * grossura * ESCALA], i * 3);
+        tamanho[i] = borda ? 1.6 + Math.random() : 0.8 + Math.random() * 1.2;
+        fase[i] = Math.random() * 6.28;
+        const c = new THREE.Color(borda ? "#ff7a86" : Math.random() < 0.5 ? "#e0303f" : "#b5162a");
+        cor.set([c.r, c.g, c.b], i * 3);
+        i++;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute("aTamanho", new THREE.BufferAttribute(tamanho, 1));
+      geo.setAttribute("aFase", new THREE.BufferAttribute(fase, 1));
+      geo.setAttribute("aCor", new THREE.BufferAttribute(cor, 3));
+      const mat = materialPontos(
+        /* glsl */ `
+        attribute float aTamanho, aFase;
+        attribute vec3 aCor;
+        uniform float uTempo, uPulso, uPixel;
+        varying vec3 vCor;
+        varying float vAlfa;
+        void main() {
+          // cada partícula treme um pouco, como plâncton brilhando
+          vec3 p = position + vec3(sin(uTempo * 1.3 + aFase), cos(uTempo * 1.1 + aFase * 1.7), 0.0) * 0.03;
+          p *= 1.0 + uPulso * 0.06;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          vCor = aCor * (0.85 + uPulso * 0.45);
+          vAlfa = 0.95;
+          gl_PointSize = aTamanho * uPixel * (30.0 / -mv.z);
+        }
+      `,
+        { uTempo: tempo, uPulso: pulso },
+      );
+      grupoCoracao.add(new THREE.Points(geo, mat));
+    }
+
+    // Texturas desenhadas no canvas: brilho redondo e coraçãozinho
+    function texturaBrilho(cor) {
+      const c = document.createElement("canvas");
+      c.width = c.height = 128;
+      const g = c.getContext("2d");
+      const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+      grad.addColorStop(0, cor);
+      grad.addColorStop(0.25, cor + "88");
+      grad.addColorStop(1, cor + "00");
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 128, 128);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    }
+
+    function texturaCoracao() {
+      const c = document.createElement("canvas");
+      c.width = c.height = 128;
+      const g = c.getContext("2d");
+      g.translate(64, 68);
+      g.shadowColor = "#ff4d5e";
+      g.shadowBlur = 22;
+      g.fillStyle = "#ff8a95";
+      g.beginPath();
+      g.moveTo(0, 26);
+      g.bezierCurveTo(-46, -4, -30, -44, 0, -20);
+      g.bezierCurveTo(30, -44, 46, -4, 0, 26);
+      g.fill();
+      g.fill(); // duas vezes para o brilho ficar mais forte
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    }
+
+    // Brilho no olho do redemoinho
+    const olho = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: texturaBrilho("#ff5a68"), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
+    );
+    olho.scale.set(3, 3, 1);
+    olho.position.y = 0.2;
+    scene.add(olho);
+
+    // Feixe de luz que liga o centro do mar ao coração
+    const feixe = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.4, ALTURA_CORACAO),
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: { uPulso: pulso },
+        vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
+        fragmentShader: /* glsl */ `
+          varying vec2 vUv;
+          uniform float uPulso;
+          void main() {
+            float lado = pow(1.0 - abs(vUv.x * 2.0 - 1.0), 3.0);
+            float a = lado * (0.35 + 0.25 * uPulso) * smoothstep(1.0, 0.6, vUv.y);
+            gl_FragColor = vec4(vec3(1.0, 0.3, 0.35) * a, a);
+          }
+        `,
+      }),
+    );
+    feixe.position.y = ALTURA_CORACAO / 2;
+    scene.add(feixe);
+
+    // Anéis de choque: um sai a cada batida
+    const aneis = [0, 1, 2].map(() => {
+      const m = new THREE.Mesh(
+        new THREE.RingGeometry(0.97, 1, 160),
+        new THREE.MeshBasicMaterial({ color: 0xe0303f, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      m.rotation.x = -Math.PI / 2;
+      m.position.y = 0.1;
+      m.userData.idade = 99;
+      scene.add(m);
+      return m;
+    });
+    let proximoAnel = 0;
+
+    // =====================================================================
+    // 3. FRASES deitadas no redemoinho, em arco, girando junto com ele
+    // =====================================================================
+    const grupoFrases = new THREE.Group();
+    scene.add(grupoFrases);
+
+    function texturaTexto(txt, fonte = "800 78px Montserrat, sans-serif", espaco = 10) {
+      const ALT = 120;
+      const c = document.createElement("canvas");
+      const g = c.getContext("2d");
+      g.font = fonte; // espaco = espaço entre letras (desenhamos letra por letra)
+      let largura = 0;
+      for (const ch of txt) largura += g.measureText(ch).width + espaco;
+      c.width = Math.ceil(largura + 40);
+      c.height = ALT;
+      g.font = fonte;
+      g.textBaseline = "middle";
+      g.shadowColor = "#c8243a";
+      g.shadowBlur = 8;
+      g.fillStyle = "#ffb3bb";
+      let x = 20;
+      for (const ch of txt) {
+        g.fillText(ch, x, ALT / 2 + 4);
+        x += g.measureText(ch).width + espaco;
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return { textura: t, proporcao: c.width / c.height };
+    }
+
+    // Faixa curva deitada no plano. O topo das letras aponta para o centro,
+    // assim a frase fica legível quando passa pela frente da câmera.
+    function arcoDeTexto(R, alt, inicio, abertura) {
+      const N = Math.max(8, Math.ceil(abertura * 48));
+      const pos = [];
+      const uv = [];
+      const idx = [];
+      for (let i = 0; i <= N; i++) {
+        const f = i / N;
+        const th = inicio + abertura * f;
+        for (const [r, v] of [[R - alt / 2, 1], [R + alt / 2, 0]]) {
+          pos.push(Math.cos(th) * r, 0, Math.sin(th) * r);
+          uv.push(1 - f, v);
+        }
+        if (i < N) {
+          const k = i * 2;
+          idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      return geo;
+    }
+
+    function montarFrases() {
+      const texturas = FRASES.map((f) => texturaTexto(f)); // seta, senão o map passa o índice como fonte
+      const aneisFrase = [5.4, 8, 10.6, 13.2, 15.8, 18.4];
+      const ALT = 0.95;
+      let k = 0;
+      aneisFrase.forEach((R, n) => {
+        let th = n * 1.3; // cada anel começa num ângulo diferente
+        const fim = th + Math.PI * 2 - 0.3;
+        while (true) {
+          const { textura, proporcao } = texturas[k % texturas.length];
+          const abertura = (ALT * proporcao) / R;
+          if (th + abertura > fim) break;
+          const mat = new THREE.MeshBasicMaterial({
+            map: textura,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+            opacity: 0.8,
+          });
+          const m = new THREE.Mesh(arcoDeTexto(R, ALT, th, abertura), mat);
+          m.position.y = 0.12;
+          grupoFrases.add(m);
+          th += abertura + 0.55 + Math.random() * 0.5;
+          k++;
+        }
+      });
+    }
+
+    const grupoEstrelas = new THREE.Group();
+    scene.add(grupoEstrelas);
+    function montarEstrelas() {
+      ESTRELAS.forEach((txt, i) => {
+        const { textura, proporcao } = texturaTexto(txt, "italic 500 84px 'Cormorant Garamond', serif", 1);
+        const s = new THREE.Sprite(
+          new THREE.SpriteMaterial({ map: textura, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+        );
+        // espalhadas numa casca em volta da galáxia, em várias alturas
+        const a = (i / ESTRELAS.length) * Math.PI * 2 * 3 + Math.random() * 0.6;
+        const r = 17 + Math.random() * 13;
+        s.position.set(Math.cos(a) * r, -1 + Math.random() * 17, Math.sin(a) * r);
+        const alt = 1.05 + Math.random() * 0.5;
+        s.scale.set(alt * proporcao, alt, 1);
+        s.userData = { fase: Math.random() * 6.28, vel: 0.4 + Math.random() * 0.6 };
+        grupoEstrelas.add(s);
+      });
+    }
+
+    // =====================================================================
+    // 4. CORAÇÕES FLUTUANTES e LUAS (cada um abre uma carta)
+    // =====================================================================
+    const clicaveis = [];
+    const grupoCoracoes = new THREE.Group();
+    scene.add(grupoCoracoes);
+    const texCoracao = texturaCoracao();
+
+    CARTAS_CORACAO.forEach((carta, i) => {
+      const s = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: texCoracao, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+      );
+      const a = (i / CARTAS_CORACAO.length) * Math.PI * 2 + 0.4;
+      const r = 6 + (i % 3) * 2.6;
+      s.position.set(Math.cos(a) * r, 1.6 + (i % 2) * 1.4, Math.sin(a) * r);
+      s.scale.setScalar(1.5);
+      s.userData = { carta, baseY: s.position.y, fase: i * 1.7, escala: 1.5 };
+      grupoCoracoes.add(s);
+      clicaveis.push(s);
+    });
+
+    const grupoLuas = new THREE.Group();
+    scene.add(grupoLuas);
+    {
+      // lua: disco claro com manchas suaves e um halo
+      const c = document.createElement("canvas");
+      c.width = c.height = 256;
+      const g = c.getContext("2d");
+      const halo = g.createRadialGradient(128, 128, 40, 128, 128, 128);
+      halo.addColorStop(0, "rgba(255,110,122,0.5)");
+      halo.addColorStop(1, "rgba(255,110,122,0)");
+      g.fillStyle = halo;
+      g.fillRect(0, 0, 256, 256);
+      const disco = g.createRadialGradient(110, 110, 4, 128, 128, 52);
+      disco.addColorStop(0, "#ffb3ba");
+      disco.addColorStop(1, "#e06a76");
+      g.fillStyle = disco;
+      g.beginPath();
+      g.arc(128, 128, 52, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = "rgba(140,30,45,0.3)";
+      for (const [x, y, r] of [[110, 112, 12], [146, 140, 9], [132, 104, 6], [112, 150, 7]]) {
+        g.beginPath();
+        g.arc(x, y, r, 0, Math.PI * 2);
+        g.fill();
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+
+      CARTAS_LUA.forEach((carta, i) => {
+        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+        const a = (i / 3) * Math.PI * 2;
+        s.position.set(Math.cos(a) * 9.5, 9 + i * 0.6, Math.sin(a) * 9.5);
+        s.scale.setScalar(2.4);
+        s.userData = { carta, baseY: s.position.y, fase: i * 2.1, escala: 2.4 };
+        grupoLuas.add(s);
+        clicaveis.push(s);
+      });
+    }
+
+    // esfera invisível em volta do coração grande, só para receber o toque
+    const alvoCoracao = new THREE.Mesh(new THREE.SphereGeometry(2.6, 12, 12), new THREE.MeshBasicMaterial({ visible: false }));
+    alvoCoracao.userData = { carta: CARTA_FINAL };
+    grupoCoracao.add(alvoCoracao);
+    clicaveis.push(alvoCoracao);
+
+    // =====================================================================
+    // 5. BOLHAS subindo, plâncton no céu e o TÚNEL do mergulho
+    // =====================================================================
+    {
+      const n = Math.floor(900 * Q);
+      const pos = new Float32Array(n * 3);
+      const vel = new Float32Array(n);
+      const fase = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = 1 + Math.random() * 16;
+        pos.set([Math.cos(a) * r, Math.random() * 16, Math.sin(a) * r], i * 3);
+        vel[i] = 0.3 + Math.random() * 0.8;
+        fase[i] = Math.random() * 6.28;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute("aVel", new THREE.BufferAttribute(vel, 1));
+      geo.setAttribute("aFase", new THREE.BufferAttribute(fase, 1));
+      const mat = materialPontos(
+        /* glsl */ `
+        attribute float aVel, aFase;
+        uniform float uTempo, uPixel;
+        varying vec3 vCor;
+        varying float vAlfa;
+        void main() {
+          vec3 p = position;
+          p.y = mod(p.y + uTempo * aVel, 16.0);
+          p.x += sin(uTempo * 0.8 + aFase) * 0.25;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          vCor = vec3(1.0, 0.45, 0.5);
+          vAlfa = 0.55 * smoothstep(16.0, 11.0, p.y); // somem perto do topo
+          gl_PointSize = (1.2 + fract(aFase) * 1.5) * uPixel * (34.0 / -mv.z);
+        }
+      `,
+        { uTempo: tempo },
+      );
+      scene.add(new THREE.Points(geo, mat));
+    }
+
+    {
+      const n = Math.floor(3500 * Q);
+      const pos = new Float32Array(n * 3);
+      const fase = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const v = new THREE.Vector3(gauss(), Math.abs(gauss()) + 0.15, gauss()).normalize().multiplyScalar(70 + Math.random() * 60);
+        pos.set([v.x, v.y, v.z], i * 3);
+        fase[i] = Math.random() * 6.28;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute("aFase", new THREE.BufferAttribute(fase, 1));
+      const mat = materialPontos(
+        /* glsl */ `
+        attribute float aFase;
+        uniform float uTempo, uPixel;
+        varying vec3 vCor;
+        varying float vAlfa;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mv;
+          vCor = mix(vec3(1.0, 0.4, 0.45), vec3(1.0, 0.75, 0.78), fract(aFase));
+          vAlfa = 0.5 + 0.5 * sin(uTempo * 1.5 + aFase);
+          gl_PointSize = (1.0 + fract(aFase * 3.0) * 1.6) * uPixel;
+        }
+      `,
+        { uTempo: tempo },
+      );
+      const ceu = new THREE.Points(geo, mat);
+      ceu.renderOrder = -1;
+      scene.add(ceu);
+    }
+
+    // Túnel: um tubo de partículas no eixo vertical; a câmera desce por dentro dele
+    const tunelFade = { value: 1 };
+    {
+      const n = Math.floor(7000 * Q);
+      const pos = new Float32Array(n * 3);
+      const fase = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = 2 + Math.pow(Math.random(), 0.7) * 11;
+        pos.set([Math.cos(a) * r, 12 + Math.random() * 95, Math.sin(a) * r], i * 3);
+        fase[i] = Math.random();
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute("aFase", new THREE.BufferAttribute(fase, 1));
+      const mat = materialPontos(
+        /* glsl */ `
+        attribute float aFase;
+        uniform float uTempo, uFade, uPixel;
+        varying vec3 vCor;
+        varying float vAlfa;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mv;
+          vCor = mix(vec3(0.75, 0.08, 0.15), vec3(1.0, 0.6, 0.65), aFase);
+          vAlfa = uFade;
+          gl_PointSize = (1.5 + aFase * 2.5) * uPixel * (40.0 / -mv.z);
+        }
+      `,
+        { uTempo: tempo, uFade: tunelFade },
+      );
+      scene.add(new THREE.Points(geo, mat));
+    }
+
+    // =====================================================================
+    // CÂMERA: começa olhando o redemoinho de cima e mergulha
+    // =====================================================================
+    const INICIO_Y = 105;
+    camera.position.set(0, INICIO_Y, 0.6);
+    camera.lookAt(0, 0, 0);
+
+    const DURACAO_MERGULHO = reduzirMovimento ? 0.01 : 4.6;
+    let mergulho = -1; // -1 = ainda na entrada; depois, segundos desde o clique
+    let livre = false;
+
+    const suave = (a, b, x) => {
+      const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+      return t * t * (3 - 2 * t);
+    };
+    const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+    function atualizarMergulho(dt) {
+      if (mergulho < 0 || livre) return;
+      mergulho += dt;
+      const s = Math.min(1, mergulho / DURACAO_MERGULHO);
+      const e = easeInOut(s);
+      const fim = posicaoFinal();
+      const y = INICIO_Y + (fim.y - INICIO_Y) * e;
+      const h = 0.6 + (fim.z - 0.6) * suave(0.45, 1, s);
+      const giro = (1 - e) * 2.2; // a câmera gira enquanto desce, como num redemoinho
+      camera.position.set(Math.sin(giro) * h, y, Math.cos(giro) * h);
+      camera.lookAt(0, ALVO.y * suave(0.4, 1, s), 0);
+      tunelFade.value = 1 - suave(0.55, 0.85, s);
+      if (s >= 1) {
+        livre = true;
+        controls.target.copy(ALVO);
+        controls.enabled = true;
+        controls.autoRotate = !reduzirMovimento;
+        controls.update();
+        document.getElementById("dica").classList.add("visivel");
+      }
+    }
+
+    // =====================================================================
+    // RESPIRAÇÃO DO CORAÇÃO: incha devagar a cada 7 s (o tum-tum rápido dava agonia)
+    // =====================================================================
+    const PERIODO = 7;
+    const PICO = 1.6; // segundo do ciclo em que ele fica maior
+    let ultimaBatida = -1;
+    function batida(t) {
+      const p = t % PERIODO;
+      const forca = reduzirMovimento ? 0.4 : 1;
+      pulso.value = forca * Math.exp(-Math.pow((p - PICO) / 0.9, 2));
+      // no pico sai uma onda suave pelo mar
+      const n = Math.floor((t - PICO) / PERIODO);
+      if (n !== ultimaBatida) {
+        ultimaBatida = n;
+        tempoBatida.value = 0;
+        if (!reduzirMovimento) {
+          const anel = aneis[proximoAnel++ % aneis.length];
+          anel.userData.idade = 0;
+        }
+      }
+    }
+
+    // =====================================================================
+    // TOQUE: abre a carta do coração ou da lua tocada
+    // =====================================================================
+    const raycaster = new THREE.Raycaster();
+    const ponteiro = new THREE.Vector2();
+    let inicioToque = null;
+    let cartaAberta = false;
+
+    canvas.addEventListener("pointerdown", (e) => {
+      inicioToque = { x: e.clientX, y: e.clientY };
+    });
+    canvas.addEventListener("pointerup", (e) => {
+      if (!livre || cartaAberta || !inicioToque) return;
+      // se arrastou, foi para girar a cena, não para tocar
+      if (Math.hypot(e.clientX - inicioToque.x, e.clientY - inicioToque.y) > 8) return;
+      ponteiro.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+      raycaster.setFromCamera(ponteiro, camera);
+      const acerto = raycaster.intersectObjects(clicaveis, false)[0];
+      if (acerto) abrirCarta(acerto.object.userData.carta);
+    });
+
+    const elCarta = document.getElementById("carta");
+    const elFoto = document.getElementById("carta-foto");
+    function abrirCarta(carta) {
+      cartaAberta = true;
+      controls.autoRotate = false;
+      document.getElementById("carta-etiqueta").textContent = carta.etiqueta || "para você";
+      document.getElementById("carta-titulo").textContent = carta.titulo;
+      document.getElementById("carta-poema").textContent = carta.poema;
+      document.getElementById("carta-musica").textContent = carta.musica || "";
+      elFoto.hidden = !carta.foto;
+      if (carta.foto) elFoto.src = carta.foto;
+      elCarta.classList.add("aberta");
+      document.getElementById("voltar").focus();
+    }
+    function fecharCarta() {
+      cartaAberta = false;
+      elCarta.classList.remove("aberta");
+      controls.autoRotate = !reduzirMovimento;
+    }
+    document.getElementById("voltar").addEventListener("click", fecharCarta);
+    elCarta.addEventListener("click", (e) => {
+      if (e.target === elCarta) fecharCarta(); // tocar fora da caixa também fecha
+    });
+    addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && cartaAberta) fecharCarta();
+    });
+
+    // =====================================================================
+    // ENTRADA e MÚSICA
+    // =====================================================================
+    const musica = document.getElementById("musica");
+    const botaoSom = document.getElementById("som");
+
+    document.getElementById("mergulhar").addEventListener("click", () => {
+      document.getElementById("entrada").classList.add("saindo");
+      mergulho = 0;
+      // o navegador só deixa tocar som depois de um toque, por isso a música começa aqui
+      // começa baixinho e sobe em 2,5 s, junto com o mergulho (no iPhone o volume é do aparelho e isso é ignorado)
+      musica.volume = 0;
+      musica
+        .play()
+        .then(() => {
+          botaoSom.hidden = false;
+          const t0 = performance.now();
+          const subir = (agora) => {
+            // o relógio do quadro pode vir um tiquinho antes do t0; sem o max() o volume dava negativo e travava em 0
+            const f = Math.min(1, Math.max(0, (agora - t0) / 2500));
+            musica.volume = 0.9 * f;
+            if (f < 1) requestAnimationFrame(subir);
+          };
+          requestAnimationFrame(subir);
+        })
+        .catch(() => {}); // sem musica.mp3 na pasta, o site segue em silêncio
+    });
+    botaoSom.addEventListener("click", () => {
+      musica.muted = !musica.muted;
+      botaoSom.style.opacity = musica.muted ? 0.4 : 1;
+    });
+
+    // =====================================================================
+    // LAÇO DE ANIMAÇÃO
+    // =====================================================================
+    const relogio = new THREE.Clock();
+    const posTmp = new THREE.Vector3();
+    function quadro() {
+      const dt = Math.min(relogio.getDelta(), 0.05);
+      const t = relogio.elapsedTime;
+      const ritmo = reduzirMovimento ? 0.3 : 1;
+      tempo.value += dt * ritmo;
+      tempoBatida.value += dt;
+
+      batida(t);
+      atualizarMergulho(dt);
+
+      // o coração balança devagar e cresce no "tum"
+      grupoCoracao.rotation.y = Math.sin(tempo.value * 0.4) * 0.45;
+      grupoCoracao.position.y = ALTURA_CORACAO + Math.sin(tempo.value * 0.9) * 0.15;
+      olho.scale.setScalar(3 + pulso.value * 0.8);
+      bloom.strength = 0.75 + pulso.value * 0.25;
+
+      // o feixe sempre de frente para a câmera
+      feixe.lookAt(camera.position.x, feixe.position.y, camera.position.z);
+
+      for (const anel of aneis) {
+        anel.userData.idade += dt;
+        const id = anel.userData.idade;
+        anel.scale.setScalar(0.5 + id * 6);
+        anel.material.opacity = Math.max(0, 0.35 * (1 - id / 2.8));
+      }
+
+      // as frases giram junto com os braços do meio do redemoinho
+      grupoFrases.rotation.y = tempo.value * 0.13;
+      grupoCoracoes.rotation.y = tempo.value * 0.05;
+      grupoLuas.rotation.y = -tempo.value * 0.035;
+      for (const s of [...grupoCoracoes.children, ...grupoLuas.children]) {
+        const u = s.userData;
+        s.position.y = u.baseY + Math.sin(tempo.value * 1.2 + u.fase) * 0.3;
+        if (s.parent === grupoCoracoes) s.scale.setScalar(u.escala * (1 + pulso.value * 0.05));
+      }
+
+      // frases-estrela: giram devagar, piscam, e somem quando passam muito perto da câmera
+      grupoEstrelas.rotation.y = -tempo.value * 0.02;
+      for (const s of grupoEstrelas.children) {
+        const u = s.userData;
+        s.getWorldPosition(posTmp);
+        const perto = Math.min(1, Math.max(0, (posTmp.distanceTo(camera.position) - 13) / 8));
+        s.material.opacity = (0.4 + 0.35 * Math.sin(tempo.value * u.vel + u.fase)) * perto;
+      }
+
+      if (livre) controls.update();
+      composer.render();
+      requestAnimationFrame(quadro);
+    }
+
+    addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+      composer.setSize(innerWidth, innerHeight);
+    });
+
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+
+    // espera a fonte carregar antes de desenhar as frases (senão saem na fonte padrão)
+    Promise.allSettled([
+      document.fonts.load("800 78px Montserrat"),
+      document.fonts.load("italic 500 84px 'Cormorant Garamond'"),
+    ]).then(() => {
+      montarFrases();
+      montarEstrelas();
+      quadro();
+    });
+  </script>
+</body>
+</html>
